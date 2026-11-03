@@ -1,0 +1,25 @@
+// styles/design.css
+:root {
+  /* Light theme */
+  --color-primary: #f9fafb; /* light gray */
+  --color-secondary: #e5e7eb; /* slightly darker */
+  --color-accent: #2563eb; /* blue */
+  --color-text: #111827; /* dark text */
+  --color-bg: #f3f4f6; /* page background */
+}
+
+.dark {
+  --color-primary: #111827; /* dark bg */
+  --color-secondary: #1f2937;
+  --color-accent: #3b82f6;
+  --color-text: #f9fafb;
+  --color-bg: #0f172a;
+}
+
+/* Utility classes for quick use */
+.bg-primary { background-color: var(--color-primary); }
+.bg-secondary { background-color: var(--color-secondary); }
+.bg-accent { background-color: var(--color-accent); }
+.text-primary { color: var(--color-primary); }
+.text-secondary { color: var(--color-secondary); }
+.text-accent { color: var(--color-accent); }
