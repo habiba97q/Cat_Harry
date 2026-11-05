@@ -13,6 +13,7 @@ const BookingSchema = new Schema(
     totalHours: { type: Number, required: true },
     hourlyRate: { type: Number, required: true },
     totalPrice: { type: Number, required: true },
+    notes: { type: String, trim: true, maxlength: 1000, default: '' },
     status: {
       type: String,
       enum: ['Pending', 'Confirmed', 'Completed', 'Cancelled'],

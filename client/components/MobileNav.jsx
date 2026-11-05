@@ -2,19 +2,20 @@
 // components/MobileNav.jsx
 import Link from 'next/link';
 import { useTheme } from './ThemeProvider';
+import { useContext } from 'react';
+import { AuthContext } from '../src/context/AuthContext';
+import Image from 'next/image';
 
-// Mock auth state for demo UI
-const isAuthenticated = true;
-const userName = 'Jane Doe';
-const userAvatar = 'https://i.pravatar.cc/40?img=5';
-
-export default function MobileNav({ open, setOpen }) {
+export default function MobileNav({ open, setOpen, onLogout }) {
   const { theme, toggleTheme } = useTheme();
+  const { user } = useContext(AuthContext);
+  const isAuthenticated = Boolean(user);
 
   const navLinks = [
     { name: 'Home', href: '/' },
     { name: 'Explore Studios', href: '/studios' },
     { name: 'How It Works', href: '/#how-it-works' },
+    { name: 'About Us', href: '/about' },
   ];
 
   const close = () => setOpen(false);
@@ -62,22 +63,25 @@ export default function MobileNav({ open, setOpen }) {
           {isAuthenticated ? (
             <>
               <div className="flex items-center space-x-3 py-2 px-2">
-                <img src={userAvatar} alt={userName} className="w-9 h-9 rounded-full ring-2 ring-primary" />
+                {user.photoURL
+                  ? <Image src={user.photoURL} alt="" width={36} height={36} className="w-9 h-9 rounded-full ring-2 ring-primary object-cover" />
+                  : <div className="w-9 h-9 rounded-full ring-2 ring-primary bg-primary/10 flex items-center justify-center text-primary font-bold">{user.name?.slice(0, 1)}</div>}
                 <div>
-                  <p className="font-semibold text-sm">{userName}</p>
-                  <p className="text-xs text-gray-500">Studio Host</p>
+                  <p className="font-semibold text-sm">{user.name}</p>
+                  <p className="text-xs text-gray-500 capitalize">{user.role}</p>
                 </div>
               </div>
-              <Link href="/add-studio" className="btn btn-primary btn-sm gap-1" onClick={close}>
+              {user.role === 'host' && <Link href="/add-studio" className="btn btn-primary btn-sm gap-1" onClick={close}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 Add New Studio
-              </Link>
+              </Link>}
               <Link href="/dashboard" className="btn btn-ghost justify-start btn-sm" onClick={close}>Dashboard</Link>
-              <Link href="/my-listings" className="btn btn-ghost justify-start btn-sm" onClick={close}>My Studio Listings</Link>
-              <Link href="/my-bookings" className="btn btn-ghost justify-start btn-sm" onClick={close}>My Bookings</Link>
-              <button className="btn btn-outline btn-error btn-sm justify-start">Logout</button>
+              {user.role === 'host'
+                ? <Link href="/my-listings" className="btn btn-ghost justify-start btn-sm" onClick={close}>My Studio Listings</Link>
+                : <Link href="/my-bookings" className="btn btn-ghost justify-start btn-sm" onClick={close}>My Bookings</Link>}
+              <button className="btn btn-outline btn-error btn-sm justify-start" onClick={() => { close(); onLogout(); }}>Logout</button>
             </>
           ) : (
             <>
@@ -90,7 +94,7 @@ export default function MobileNav({ open, setOpen }) {
         {/* Theme toggle at bottom */}
         <div className="p-4 border-t border-base-300">
           <button onClick={toggleTheme} className="btn btn-ghost btn-sm w-full justify-start gap-2">
-            {theme === 'light' ? (
+            {theme === 'mytheme' ? (
               <>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />

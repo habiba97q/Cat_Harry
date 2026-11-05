@@ -14,12 +14,9 @@ export default function StudioCard({ studio }) {
   return (
     <div className="card bg-base-100 shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden border border-base-200">
       <figure className="relative h-48">
-        <Image
-          src={studio.thumbnail}
-          alt={studio.name}
-          fill
-          className="object-cover"
-        />
+        {studio.thumbnail
+          ? <Image src={studio.thumbnail} alt={studio.name} fill className="object-cover" />
+          : <div className="h-full w-full flex items-center justify-center bg-base-200 text-gray-500">No photo</div>}
         {/* Category badge */}
         <div className="absolute top-3 left-3">
           <span className="badge badge-primary text-xs font-semibold shadow-md">

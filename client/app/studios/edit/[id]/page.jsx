@@ -6,7 +6,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { api } from '../../../../src/utils/api';
 import { toast } from 'sonner';
 import { AuthContext } from '../../../../src/context/AuthContext';
-import { demoCategories } from '../../../../data/demoCategories'; // fallback categories list
+import { demoCategories } from '../../../../data/demoCategories';
 
 export default function EditStudioPage() {
   const router = useRouter();
@@ -31,6 +31,7 @@ export default function EditStudioPage() {
   // Auth guard
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
+    else if (!authLoading && user?.role !== 'host') router.replace('/dashboard');
   }, [authLoading, user, router]);
 
   // Fetch studio data
@@ -57,7 +58,7 @@ export default function EditStudioPage() {
         setLoading(false);
       }
     };
-    if (user) fetchStudio();
+    if (user?.role === 'host') fetchStudio();
   }, [user, params.id, router]);
 
   const handleFileChange = (e) => {
@@ -90,6 +91,9 @@ export default function EditStudioPage() {
     try {
       const formData = new FormData();
       Object.entries(form).forEach(([key, value]) => formData.append(key, value));
+      if (!files.image && studio.image && /^https:\/\//i.test(studio.image)) {
+        formData.append('image', studio.image);
+      }
       if (files.image) formData.append('image', files.image);
       if (files.gallery.length) files.gallery.forEach((f) => formData.append('gallery', f));
       await api.put(`/studios/${params.id}`, formData);
@@ -102,7 +106,7 @@ export default function EditStudioPage() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="flex justify-center items-center min-h-[200px]">
         <span className="loading loading-spinner text-primary"></span>
@@ -110,7 +114,7 @@ export default function EditStudioPage() {
     );
   }
 
-  if (!studio) return null; // safety
+  if (!user || user.role !== 'host' || !studio) return null;
 
   return (
     <div className="max-w-3xl mx-auto py-8 space-y-8">
@@ -130,7 +134,9 @@ export default function EditStudioPage() {
 
       {/* Current cover image */}
       <div className="relative h-48 rounded-2xl overflow-hidden mb-4">
-        <Image src={studio.image} alt={studio.title} fill className="object-cover" />
+        {studio.image
+          ? <Image src={studio.image} alt={studio.title} fill className="object-cover" />
+          : <div className="h-full flex items-center justify-center bg-base-200 text-gray-500">No cover photo yet</div>}
         <div className="absolute inset-0 bg-black/40 flex items-center justify-center cursor-pointer" onClick={() => fileInputRef.current && fileInputRef.current.click()}>
           <button className="btn btn-white bg-white gap-2 text-sm">Change Cover Photo</button>
         </div>

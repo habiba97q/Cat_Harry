@@ -3,62 +3,49 @@
 import { useState, useEffect, useContext } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { demoStudios } from '../../../data/demoStudios';
 import { api } from '../../../src/utils/api';
 import { toast } from 'sonner';
 import { AuthContext } from '../../../src/context/AuthContext';
 import { useRouter } from 'next/navigation';
 
-const amenitiesMap = {
-  'Photo Studios': ['Professional Lighting Rigs', 'Cyclorama (Cyc) Wall', 'Backdrop Collection', 'Changing Rooms', 'Props & Styling Area', 'WiFi', 'Parking'],
-  'Sound Stages': ['Green Screen', '4K Camera Equipment', 'Director Monitors', 'Sound Dampening', 'Makeup Room', 'Lounge Area', 'WiFi'],
-  'Podcast Rooms': ['Broadcast Microphones', 'Acoustic Treatment', 'Audio Interface', 'Headphone Monitoring', 'Recording Software', 'Soundproof Booth', 'WiFi'],
-  'Music Suites': ['Grand Piano', 'Recording Console', 'Isolation Booths', 'Instrument Collection', 'Reference Monitors', 'Pro Tools', 'WiFi'],
-  'Art Workshops': ['Natural Lighting', 'Easels & Canvases', 'Pottery Wheels', 'Kiln Access', 'Material Storage', 'Sink & Cleanup Station', 'WiFi'],
-};
-
-const galleryImages = (studio) => [
-  studio.image,
-  `https://images.unsplash.com/photo-1605810230434-7631ac76ec81?auto=format&fit=crop&w=800&q=80`,
-  `https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?auto=format&fit=crop&w=800&q=80`,
-  `https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=800&q=80`,
-];
-
-const demoReviews = [
-  { name: 'Alex Turner', avatar: 'https://i.pravatar.cc/40?img=12', rating: 5, date: 'Oct 2026', comment: 'Absolutely stunning space. The lighting setup was perfect for our fashion shoot.' },
-  { name: 'Maya Chen', avatar: 'https://i.pravatar.cc/40?img=22', rating: 5, date: 'Sep 2026', comment: 'Professional, clean, and well-equipped. Our podcast sounded incredible.' },
-  { name: 'Jordan Blake', avatar: 'https://i.pravatar.cc/40?img=33', rating: 4, date: 'Aug 2026', comment: 'Great value for the quality. Would definitely book again for our next project.' },
-];
-
 export default function StudioDetailsPage({ params }) {
   const router = useRouter();
-  const { user, loading: authLoading } = useContext(AuthContext);
+  const { user } = useContext(AuthContext);
   const [studio, setStudio] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reviews, setReviews] = useState([]);
+  const [reviewMeta, setReviewMeta] = useState({ avgRating: 0, count: 0 });
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingForm, setBookingForm] = useState({ date: '', time: '', hours: 2, notes: '' });
   const [bookingLoading, setBookingLoading] = useState(false);
   const [booked, setBooked] = useState(false);
 
-  // Fetch studio data from backend (fallback to demo if fails)
+  // Load the listing and its persisted reviews.
   useEffect(() => {
+    let active = true;
     const fetchStudio = async () => {
       try {
-        const { data } = await api.get(`/studios/${params.id}`);
-        setStudio(data);
+        const [studioResponse, reviewResponse] = await Promise.all([
+          api.get(`/studios/${params.id}`),
+          api.get(`/reviews/studio/${params.id}`),
+        ]);
+        if (!active) return;
+        setStudio(studioResponse.data);
+        setReviews(reviewResponse.data || []);
+        setReviewMeta(reviewResponse.meta || { avgRating: 0, count: 0 });
       } catch (err) {
-        const demo = demoStudios.find((s) => s.id === params.id);
-        if (demo) setStudio(demo);
-        else toast.error('Studio not found');
+        if (active) setError(err.message || 'Unable to load this studio');
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
     fetchStudio();
+    return () => { active = false; };
   }, [params.id]);
 
-  const images = studio ? galleryImages(studio) : [];
-  const amenities = studio ? (amenitiesMap[studio.category] || amenitiesMap['Photo Studios']) : [];
+  const images = studio ? [studio.image, ...(studio.gallery || [])].filter(Boolean) : [];
+  const amenities = studio?.amenities || [];
   const [activeImg, setActiveImg] = useState(0);
 
   const total = bookingForm.hours * (studio?.hourlyRate || 0);
@@ -68,6 +55,15 @@ export default function StudioDetailsPage({ params }) {
     if (!user) {
       toast.error('Please log in to book a studio');
       router.push('/login');
+      return;
+    }
+    if (!bookingForm.date || !bookingForm.time) {
+      toast.error('Choose a date and start time');
+      return;
+    }
+    const [startHour, startMinute] = bookingForm.time.split(':').map(Number);
+    if (startHour * 60 + startMinute + bookingForm.hours * 60 > 24 * 60) {
+      toast.error('The booking must end before midnight');
       return;
     }
     setBookingLoading(true);
@@ -105,7 +101,12 @@ export default function StudioDetailsPage({ params }) {
   }
 
   if (!studio) {
-    return <div className="p-8 text-center text-xl">Studio not found</div>;
+    return (
+      <div className="p-8 text-center space-y-4">
+        <p className="text-xl">{error || 'Studio not found'}</p>
+        <Link href="/studios" className="btn btn-primary">Back to Explore Studios</Link>
+      </div>
+    );
   }
 
   return (
@@ -121,8 +122,10 @@ export default function StudioDetailsPage({ params }) {
 
       {/* Image Gallery */}
       <section className="space-y-3">
-        <div className="relative h-80 md:h-[28rem] rounded-2xl overflow-hidden">
-          <Image src={images[activeImg]} alt={studio.title} fill className="object-cover transition-all duration-500" priority />
+        <div className="relative h-80 md:h-[28rem] rounded-2xl overflow-hidden bg-base-200">
+          {images.length > 0
+            ? <Image src={images[activeImg]} alt={studio.title} fill className="object-cover transition-all duration-500" priority />
+            : <div className="h-full flex items-center justify-center text-gray-500">No photos have been added for this studio.</div>}
           <div className="absolute top-4 right-4">
             <span className="badge badge-primary font-semibold px-3 py-2">{studio.category}</span>
           </div>
@@ -149,8 +152,8 @@ export default function StudioDetailsPage({ params }) {
             <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
               <span className="flex items-center gap-1">
                 <span className="text-yellow-400">★</span>
-                <strong className="text-base-content">{studio.rating}</strong>
-                ({Math.round(studio.rating * 12)} reviews)
+                <strong className="text-base-content">{reviewMeta.avgRating ? reviewMeta.avgRating.toFixed(1) : 'New'}</strong>
+                ({reviewMeta.count} reviews)
               </span>
               <span>📍 {studio.address}</span>
               <span>🏷️ {studio.category}</span>
@@ -161,7 +164,7 @@ export default function StudioDetailsPage({ params }) {
           <div>
             <h2 className="text-xl font-bold mb-3">About This Studio</h2>
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-              {studio.overview || `Welcome to ${studio.title} — a top-rated ${studio.category.toLowerCase()} in ${studio.address}. This space is fully equipped for professional shoots, recordings, and creative productions. Perfect for photographers, filmmakers, podcasters, musicians, and artists who demand the best.`}
+              {studio.overview || 'The host has not added a description yet.'}
             </p>
           </div>
 
@@ -173,9 +176,9 @@ export default function StudioDetailsPage({ params }) {
                 { label: 'Category', value: studio.category },
                 { label: 'Location', value: studio.address },
                 { label: 'Rate', value: `$${studio.hourlyRate}/hour` },
+                ...(studio.securityDeposit > 0 ? [{ label: 'Security deposit', value: `$${studio.securityDeposit}` }] : []),
                 { label: 'Min. Booking', value: '1 hour' },
-                { label: 'Capacity', value: `${studio.maxCapacity || '1–15'} people` },
-                { label: 'Availability', value: 'Mon–Sun' },
+                { label: 'Capacity', value: studio.maxCapacity ? `${studio.maxCapacity} people` : 'Not specified' },
               ].map((spec) => (
                 <div key={spec.label} className="bg-base-200 rounded-xl p-4">
                   <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{spec.label}</p>
@@ -185,8 +188,7 @@ export default function StudioDetailsPage({ params }) {
             </div>
           </div>
 
-          {/* Amenities */}
-          <div>
+          {amenities.length > 0 && <div>
             <h2 className="text-xl font-bold mb-4">Amenities &amp; Equipment</h2>
             <div className="grid grid-cols-2 gap-3">
               {amenities.map((a) => (
@@ -196,33 +198,39 @@ export default function StudioDetailsPage({ params }) {
                 </div>
               ))}
             </div>
-          </div>
+          </div>}
 
           {/* Host Info */}
           <div className="bg-base-200 rounded-2xl p-6 flex items-center gap-4">
-            <img src="https://i.pravatar.cc/56?img=9" alt="Host" className="w-14 h-14 rounded-full ring-2 ring-primary" />
+            {studio.hostId?.photoURL
+              ? <Image src={studio.hostId.photoURL} alt="" width={56} height={56} className="w-14 h-14 rounded-full ring-2 ring-primary object-cover" />
+              : <div className="w-14 h-14 rounded-full ring-2 ring-primary bg-primary/10 flex items-center justify-center text-primary font-bold">{studio.hostId?.name?.slice(0, 1) || 'H'}</div>}
             <div className="flex-1">
-              <p className="font-bold text-lg">Sarah Williams</p>
-              <p className="text-sm text-gray-500">Verified Host · Member since 2022</p>
-              <p className="text-sm text-gray-600 mt-1">Professional studio owner with 3 listings and 200+ successful bookings.</p>
+              <p className="font-bold text-lg">{studio.hostId?.name || 'Studio host'}</p>
+              <p className="text-sm text-gray-500">
+                Host{studio.hostId?.createdAt ? ` · Member since ${new Date(studio.hostId.createdAt).getFullYear()}` : ''}
+              </p>
             </div>
-            <button className="btn btn-outline btn-sm">Message</button>
           </div>
 
           {/* Reviews */}
           <div>
             <h2 className="text-xl font-bold mb-5">
               Guest Reviews
-              <span className="ml-2 text-base font-normal text-gray-500">({demoReviews.length} reviews)</span>
+              <span className="ml-2 text-base font-normal text-gray-500">({reviewMeta.count} reviews)</span>
             </h2>
-            <div className="space-y-5">
-              {demoReviews.map((r) => (
-                <div key={r.name} className="flex gap-4 pb-5 border-b border-base-300 last:border-0">
-                  <img src={r.avatar} alt={r.name} className="w-10 h-10 rounded-full flex-shrink-0" />
+            {reviews.length === 0
+              ? <p className="text-sm text-gray-500">No reviews yet.</p>
+              : <div className="space-y-5">
+              {reviews.map((r) => (
+                <div key={r._id} className="flex gap-4 pb-5 border-b border-base-300 last:border-0">
+                  {r.userId?.photoURL
+                    ? <Image src={r.userId.photoURL} alt="" width={40} height={40} className="w-10 h-10 rounded-full flex-shrink-0 object-cover" />
+                    : <div className="w-10 h-10 rounded-full bg-primary/10 flex-shrink-0 flex items-center justify-center text-primary font-semibold">{r.userId?.name?.slice(0, 1) || 'U'}</div>}
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
-                      <p className="font-semibold text-sm">{r.name}</p>
-                      <span className="text-xs text-gray-400">{r.date}</span>
+                      <p className="font-semibold text-sm">{r.userId?.name || 'StudioSpace member'}</p>
+                      <span className="text-xs text-gray-400">{new Date(r.createdAt).toLocaleDateString()}</span>
                     </div>
                     <div className="flex mb-2">
                       {Array.from({ length: 5 }).map((_, i) => (
@@ -233,7 +241,7 @@ export default function StudioDetailsPage({ params }) {
                   </div>
                 </div>
               ))}
-            </div>
+            </div>}
           </div>
         </div>
 
@@ -245,8 +253,8 @@ export default function StudioDetailsPage({ params }) {
               <span className="text-gray-500 text-sm">/ hour</span>
             </div>
             <div className="flex items-center gap-1 text-sm text-gray-500">
-              <span className="text-yellow-400">★ {studio.rating}</span>
-              <span>· {Math.round(studio.rating * 12)} reviews</span>
+              <span className="text-yellow-400">★ {reviewMeta.avgRating ? reviewMeta.avgRating.toFixed(1) : 'New'}</span>
+              <span>· {reviewMeta.count} reviews</span>
             </div>
             <hr className="border-base-300" />
 
@@ -259,13 +267,12 @@ export default function StudioDetailsPage({ params }) {
               </div>
             ) : (
               <>
-                <p className="text-xs text-warning bg-warning/10 rounded-lg px-3 py-2">⚠️ Real booking will be processed via backend.</p>
                 <button className="btn btn-primary w-full text-base font-bold" onClick={() => setBookingOpen(true)} disabled={bookingLoading}>
                   {bookingLoading ? <span className="loading loading-spinner"></span> : 'Reserve This Studio'}
                 </button>
               </>
             )}
-            <div className="text-xs text-center text-gray-400">No charge until booking is confirmed</div>
+            <div className="text-xs text-center text-gray-400">Send a request; the host will confirm availability.</div>
           </div>
         </div>
       </div>
@@ -281,7 +288,7 @@ export default function StudioDetailsPage({ params }) {
             <form onSubmit={handleBook} className="space-y-4">
               <div>
                 <label className="label"><span className="label-text font-medium">Date</span></label>
-                <input type="date" required className="input input-bordered w-full" value={bookingForm.date} onChange={(e) => setBookingForm({ ...bookingForm, date: e.target.value })} />
+                <input type="date" min={new Date().toISOString().slice(0, 10)} required className="input input-bordered w-full" value={bookingForm.date} onChange={(e) => setBookingForm({ ...bookingForm, date: e.target.value })} />
               </div>
               <div>
                 <label className="label"><span className="label-text font-medium">Start Time</span></label>
@@ -297,7 +304,7 @@ export default function StudioDetailsPage({ params }) {
               </div>
               <div>
                 <label className="label"><span className="label-text font-medium">Notes (optional)</span></label>
-                <textarea className="textarea textarea-bordered w-full" placeholder="Any special requirements..." rows={3} value={bookingForm.notes} onChange={(e) => setBookingForm({ ...bookingForm, notes: e.target.value })} />
+                <textarea className="textarea textarea-bordered w-full" maxLength={1000} placeholder="Any special requirements..." rows={3} value={bookingForm.notes} onChange={(e) => setBookingForm({ ...bookingForm, notes: e.target.value })} />
               </div>
               <div className="bg-base-200 rounded-xl p-4 flex justify-between font-bold">
                 <span>Estimated Total</span>

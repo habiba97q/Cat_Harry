@@ -1,5 +1,6 @@
 // components/Footer.jsx
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Footer() {
   return (
@@ -8,10 +9,7 @@ export default function Footer() {
         {/* Brand */}
         <div className="space-y-3">
           <div className="flex items-center space-x-2">
-            {/* X logo inline SVG */}
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.745l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.91-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z"/>
-            </svg>
+            <Image src="/logo.svg" alt="" width={28} height={28} />
             <span className="font-bold text-lg text-primary">StudioSpace</span>
           </div>
           <p className="text-sm opacity-70 leading-relaxed">
@@ -46,10 +44,11 @@ export default function Footer() {
         <div>
           <h4 className="font-semibold mb-3 text-sm uppercase tracking-wide opacity-60">Company</h4>
           <ul className="space-y-2 text-sm">
-            <li><Link href="/" className="link link-hover">About Us</Link></li>
+            <li><Link href="/about" className="link link-hover">About Us</Link></li>
             <li><Link href="/" className="link link-hover">Contact</Link></li>
-            <li><Link href="/" className="link link-hover">Privacy Policy</Link></li>
-            <li><Link href="/" className="link link-hover">Terms of Service</Link></li>
+            <li><Link href="/about#privacy" className="link link-hover">Privacy Policy</Link></li>
+            <li><Link href="/about#terms" className="link link-hover">Terms of Service</Link></li>
+            <li><a href="https://x.com" target="_blank" rel="noreferrer" className="link link-hover">Follow on X</a></li>
           </ul>
         </div>
       </div>

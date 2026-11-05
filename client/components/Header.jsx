@@ -6,27 +6,32 @@ import { useTheme } from './ThemeProvider';
 import MobileNav from './MobileNav';
 import Image from 'next/image';
 import { AuthContext } from '../src/context/AuthContext';
+import { usePathname, useRouter } from 'next/navigation';
 
 export default function Header() {
   const { theme, toggleTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, logout } = useContext(AuthContext);
+  const router = useRouter();
+  const pathname = usePathname();
 
   const isAuthenticated = !!user;
   const userName = user?.name || '';
-  const userAvatar = user?.avatar || 'https://i.pravatar.cc/40';
+  const userAvatar = user?.photoURL;
 
   const navLinks = [
     { name: 'Home', href: '/' },
     { name: 'Explore Studios', href: '/studios' },
     { name: 'How It Works', href: '/#how-it-works' },
+    { name: 'About Us', href: '/about' },
   ];
 
   const handleLogout = async () => {
     try {
       await logout();
-    } catch (e) {
-      console.error(e);
+      router.push('/');
+    } catch (error) {
+      console.error('Unable to log out', error);
     }
   };
 
@@ -43,31 +48,38 @@ export default function Header() {
       {/* Desktop Nav */}
       <div className="flex-none hidden lg:flex items-center space-x-1">
         {navLinks.map((link) => (
-          <Link key={link.href} href={link.href} className="btn btn-ghost btn-sm text-sm font-medium">
+          <Link
+            key={link.href}
+            href={link.href}
+            className={`btn btn-sm text-sm font-medium ${pathname === link.href || (link.href === '/studios' && pathname.startsWith('/studios')) ? 'btn-primary' : 'btn-ghost'}`}
+            aria-current={pathname === link.href || (link.href === '/studios' && pathname.startsWith('/studios')) ? 'page' : undefined}
+          >
             {link.name}
           </Link>
         ))}
 
         {isAuthenticated ? (
           <>
-            <Link href="/add-studio" className="btn btn-primary btn-sm ml-2 gap-1">
+            {user.role === 'host' && <Link href="/add-studio" className="btn btn-primary btn-sm ml-2 gap-1">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               Add Studio
-            </Link>
+            </Link>}
             {/* Avatar dropdown */}
             <div className="dropdown dropdown-end ml-2">
               <label tabIndex={0} className="btn btn-ghost btn-circle avatar">
-                <div className="w-9 rounded-full overflow-hidden ring-2 ring-primary ring-offset-1">
-                  <img src={userAvatar} alt={userName} />
+                <div className="w-9 rounded-full overflow-hidden ring-2 ring-primary ring-offset-1 flex items-center justify-center bg-primary/10 text-primary">
+                  {userAvatar ? <Image src={userAvatar} alt="" width={36} height={36} className="w-full h-full object-cover" /> : <span>{userName.slice(0, 1)}</span>}
                 </div>
               </label>
               <ul tabIndex={0} className="mt-3 p-2 shadow-xl menu menu-sm dropdown-content bg-base-100 rounded-box w-52 border border-base-300">
                 <li className="menu-title px-4 py-2 font-semibold text-primary">{userName}</li>
                 <li><Link href="/dashboard">Dashboard</Link></li>
-                <li><Link href="/my-listings">My Studio Listings</Link></li>
-                <li><Link href="/my-bookings">My Bookings</Link></li>
+                {user.role === 'host' && <li><Link href="/add-studio">Add New Studio</Link></li>}
+                {user.role === 'host'
+                  ? <li><Link href="/my-listings">My Studio Listings</Link></li>
+                  : <li><Link href="/my-bookings">My Bookings</Link></li>}
                 <li><hr className="my-1 border-base-300" /></li>
                 <li><button className="text-error font-medium" onClick={handleLogout}>Logout</button></li>
               </ul>
@@ -110,7 +122,7 @@ export default function Header() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <MobileNav open={mobileOpen} setOpen={setMobileOpen} />
+        <MobileNav open={mobileOpen} setOpen={setMobileOpen} onLogout={handleLogout} />
       </div>
     </header>
   );

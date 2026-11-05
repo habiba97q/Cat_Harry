@@ -6,7 +6,7 @@
  * parsed JSON payload attached as `error.response` for easy handling.
  */
 
-const SERVER_URL = (process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:5000') + '/api';
+const SERVER_URL = `${(process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:5000').replace(/\/+$/, '')}/api`;
 
 async function request(path, { method = 'GET', body, headers = {} } = {}) {
   const opts = {
@@ -19,8 +19,8 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
     credentials: 'include', // send HttpOnly cookie
   };
 
-  if (body) {
-    if (body instanceof FormData) {
+  if (body !== undefined && body !== null) {
+    if (typeof FormData !== 'undefined' && body instanceof FormData) {
       // Let browser set correct multipart headers
       opts.body = body;
     } else {
@@ -32,8 +32,8 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
   const res = await fetch(`${SERVER_URL}${path}`, opts);
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    const error = new Error(data?.message || res.statusText);
-    error.response = data;
+    const error = new Error(data?.message || data?.errors?.[0]?.msg || res.statusText || 'Request failed');
+    error.response = { data, status: res.status };
     error.status = res.status;
     throw error;
   }
@@ -44,6 +44,7 @@ export const api = {
   get: (path) => request(path, { method: 'GET' }),
   post: (path, body, headers) => request(path, { method: 'POST', body, headers }),
   patch: (path, body, headers) => request(path, { method: 'PATCH', body, headers }),
+  put: (path, body, headers) => request(path, { method: 'PUT', body, headers }),
   del: (path) => request(path, { method: 'DELETE' }),
 };
 

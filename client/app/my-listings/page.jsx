@@ -6,43 +6,57 @@ import { api } from '../../src/utils/api';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { AuthContext } from '../../src/context/AuthContext';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 export default function MyListingsPage() {
   const { user, loading: authLoading } = useContext(AuthContext);
   const router = useRouter();
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace('/login');
+    } else if (!authLoading && user?.role !== 'host') {
+      router.replace('/dashboard');
     }
   }, [authLoading, user, router]);
 
   // Fetch user studios
   useEffect(() => {
     const fetchListings = async () => {
+      setLoading(true);
+      setError('');
       try {
         const data = await api.get('/studios/my');
         setListings(data.data);
       } catch (err) {
+        setError(err.message || 'Failed to load listings');
         toast.error(err.message || 'Failed to load listings');
       } finally {
         setLoading(false);
       }
     };
-    if (user) fetchListings();
-  }, [user]);
+    if (user?.role === 'host') fetchListings();
+  }, [user, retry]);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this studio? This action cannot be undone.')) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await api.del(`/studios/${id}`);
-      setListings((prev) => prev.filter((s) => s._id !== id));
+      await api.del(`/studios/${deleteTarget._id}`);
+      setListings((prev) => prev.filter((s) => s._id !== deleteTarget._id));
+      setDeleteTarget(null);
       toast.success('Studio deleted');
     } catch (err) {
       toast.error(err.message || 'Failed to delete studio');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -50,6 +64,15 @@ export default function MyListingsPage() {
     return (
       <div className="flex justify-center items-center min-h-[200px]">
         <span className="loading loading-spinner text-primary"></span>
+      </div>
+    );
+  }
+  if (authLoading || !user || user.role !== 'host') return null;
+  if (error) {
+    return (
+      <div className="text-center py-16 space-y-3">
+        <p className="text-error">{error}</p>
+        <button className="btn btn-primary" onClick={() => setRetry((value) => value + 1)}>Try again</button>
       </div>
     );
   }
@@ -73,8 +96,8 @@ export default function MyListingsPage() {
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: 'Total Listings', value: listings.length, color: 'text-primary' },
-          { label: 'Active', value: listings.filter((s) => s.status === 'active').length, color: 'text-success' },
-          { label: 'Inactive / Pending', value: listings.filter((s) => s.status !== 'active').length, color: 'text-warning' },
+          { label: 'Published', value: listings.length, color: 'text-success' },
+          { label: 'Average Rate', value: listings.length ? `$${(listings.reduce((sum, studio) => sum + studio.hourlyRate, 0) / listings.length).toFixed(2)}` : '$0.00', color: 'text-warning' },
         ].map((s) => (
           <div key={s.label} className="bg-base-100 border border-base-300 rounded-2xl p-5 text-center">
             <p className={`text-3xl font-extrabold ${s.color}`}>{s.value}</p>
@@ -102,8 +125,8 @@ export default function MyListingsPage() {
                 <tr key={studio._id} className="hover:bg-base-200 transition-colors">
                   <td>
                     <div className="flex items-center gap-3">
-                      <div className="relative w-14 h-10 rounded-lg overflow-hidden flex-shrink-0">
-                        <Image src={studio.image} alt={studio.title} fill className="object-cover" />
+                      <div className="relative w-14 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-base-200">
+                        {studio.image && <Image src={studio.image} alt={studio.title} fill className="object-cover" />}
                       </div>
                       <p className="font-semibold text-sm">{studio.title}</p>
                     </div>
@@ -112,13 +135,13 @@ export default function MyListingsPage() {
                   <td className="text-sm text-gray-500">{studio.address}</td>
                   <td className="font-semibold text-primary">${studio.hourlyRate}/hr</td>
                   <td>
-                    <span className={`badge ${studio.status === 'active' ? 'badge-success' : (studio.status === 'pending' ? 'badge-warning' : 'badge-error')} badge-sm capitalize`}>{studio.status}</span>
+                    <span className="badge badge-success badge-sm">Active</span>
                   </td>
                   <td>
                     <div className="flex gap-2">
                       <Link href={`/studios/${studio._id}`} className="btn btn-ghost btn-xs">View</Link>
                       <Link href={`/studios/edit/${studio._id}`} className="btn btn-outline btn-xs btn-primary">Edit</Link>
-                      <button onClick={() => handleDelete(studio._id)} className="btn btn-ghost btn-xs text-warning" title="Delete">Delete</button>
+                      <button onClick={() => setDeleteTarget(studio)} className="btn btn-ghost btn-xs text-warning" title="Delete">Delete</button>
                     </div>
                   </td>
                 </tr>
@@ -126,6 +149,15 @@ export default function MyListingsPage() {
             </tbody>
           </table>
         </div>
+        <ConfirmDialog
+          open={Boolean(deleteTarget)}
+          title="Delete studio listing?"
+          description={deleteTarget ? `“${deleteTarget.title}” will be permanently deleted. Active booking requests must be cancelled first.` : ''}
+          confirmLabel="Delete listing"
+          busy={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
       </div>
     </div>
   );

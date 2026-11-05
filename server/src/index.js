@@ -18,7 +18,12 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: config.clientUrl,
+  origin(origin, callback) {
+    if (!origin || config.clientUrls.includes(origin)) return callback(null, true);
+    const error = new Error(`Origin ${origin} is not allowed by CORS`);
+    error.statusCode = 403;
+    return callback(error);
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -37,7 +42,9 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
 // Health check
-app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/api/health', (req, res) => res.json({ success: true, status: 'ok' }));
+
+app.use((req, res) => res.status(404).json({ success: false, message: 'Route not found' }));
 
 // Global error handler
 app.use(errorHandler);
@@ -55,6 +62,7 @@ const start = async () => {
   }
 };
 
-start();
+if (require.main === module) start();
 
 module.exports = app;
+module.exports.start = start;
