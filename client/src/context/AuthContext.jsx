@@ -15,9 +15,10 @@ export const AuthProvider = ({ children }) => {
     const fetchMe = async () => {
       try {
         const data = await api.get('/auth/me');
-        setUser(data.user);
-      } catch (err) {
-        // Not authenticated – keep user null
+        setUser(data.data);
+      } catch (error) {
+        setUser(null);
+        if (error.status !== 401) toast.error(error.message || 'Unable to restore your session');
       } finally {
         setLoading(false);
       }
@@ -29,7 +30,7 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       const data = await api.post('/auth/login', { email, password });
-      setUser(data.user);
+      setUser(data.data);
       toast.success('Logged in successfully');
     } catch (err) {
       toast.error(err.message || 'Login failed');
@@ -43,10 +44,23 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       const data = await api.post('/auth/register', payload);
-      setUser(data.user);
-      toast.success('Registered successfully');
+      return data.data;
     } catch (err) {
-      toast.error(err.message || 'Registration failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const googleLogin = useCallback(async (idToken) => {
+    setLoading(true);
+    try {
+      const data = await api.post('/auth/google', { idToken });
+      setUser(data.data);
+      toast.success('Signed in with Google');
+      return data.data;
+    } catch (err) {
+      toast.error(err.message || 'Google sign-in failed');
       throw err;
     } finally {
       setLoading(false);
@@ -61,12 +75,13 @@ export const AuthProvider = ({ children }) => {
       toast.success('Logged out');
     } catch (err) {
       toast.error(err.message || 'Logout failed');
+      throw err;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const value = { user, loading, login, register, logout };
+  const value = { user, loading, login, register, googleLogin, logout };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

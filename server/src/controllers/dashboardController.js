@@ -59,7 +59,7 @@ exports.getHostDashboard = async (req, res, next) => {
         { $group: { _id: '$status', count: { $sum: 1 } } },
       ]),
       Booking.aggregate([
-        { $match: { hostId, status: 'Confirmed' } },
+        { $match: { hostId, status: { $in: ['Confirmed', 'Completed'] } } },
         { $group: { _id: null, totalEarnings: { $sum: '$totalPrice' } } },
       ]),
     ]);
@@ -72,14 +72,14 @@ exports.getHostDashboard = async (req, res, next) => {
     });
     statusMap.Total = total;
 
-    const totalEarnings = earnings[0]?.totalEarnings || 0;
+    const totalBookingValue = earnings[0]?.totalEarnings || 0;
 
     res.json({
       success: true,
       data: {
         user: { name: req.user.name, email: req.user.email, role: req.user.role },
         totalListings: listingsCount,
-        totalEarnings,
+        totalBookingValue,
         stats: statusMap,
         recentBookings: bookings,
       },
@@ -88,5 +88,3 @@ exports.getHostDashboard = async (req, res, next) => {
     next(err);
   }
 };
-
-

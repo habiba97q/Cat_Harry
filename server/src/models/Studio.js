@@ -19,6 +19,8 @@ const StudioSchema = new Schema(
     amenities: [{ type: String }],
     overview: { type: String },
     hostId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    bookingLockToken: { type: String, select: false },
+    bookingLockExpiresAt: { type: Date, select: false },
   },
   { timestamps: true }
 );

@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "node --test"
   },
   "allowScripts": {
     "bcrypt": true,
@@ -21,6 +22,7 @@
     "express-rate-limit": "^8.7.2",
     "express-validator": "^7.3.2",
     "form-data": "4.0.0",
+    "google-auth-library": "^9.15.1",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "6.6.0",
     "mongoose": "^9.11.4",

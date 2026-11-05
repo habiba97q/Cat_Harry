@@ -1,7 +1,21 @@
 // src/controllers/studioController.js
 const mongoose = require('mongoose');
 const Studio = require('../models/Studio');
+const Booking = require('../models/Booking');
 const { validationResult } = require('express-validator');
+const { acquireStudioBookingLock } = require('../utils/studioBookingLock');
+const path = require('path');
+
+function uploadedImageUrl(file) {
+  if (!file) return '';
+  if (/^https?:\/\//i.test(file.path)) return file.path;
+  return `/uploads/${path.basename(file.path || file.filename)}`;
+}
+
+function parseList(value) {
+  if (typeof value === 'string') return value.split(',').map((item) => item.trim()).filter(Boolean);
+  return Array.isArray(value) ? value : [];
+}
 
 // @desc   Create a new studio (image via Cloudinary)
 // @route  POST /api/studios
@@ -15,14 +29,12 @@ exports.createStudio = async (req, res, next) => {
     const { title, category, hourlyRate, securityDeposit, maxCapacity, address, overview, amenities } = req.body;
 
     // Parse amenities if sent as comma-separated string
-    const parsedAmenities = typeof amenities === 'string'
-      ? amenities.split(',').map((a) => a.trim()).filter(Boolean)
-      : Array.isArray(amenities) ? amenities : [];
+    const parsedAmenities = parseList(amenities);
 
     // Cloudinary image URL(s) uploaded via multer middleware
-    const image = req.files?.image?.[0]?.path || req.body.image || '';
+    const image = uploadedImageUrl(req.files?.image?.[0]) || req.body.image || '';
     const gallery = req.files?.gallery
-      ? req.files.gallery.map((f) => f.path)
+      ? req.files.gallery.map(uploadedImageUrl)
       : Array.isArray(req.body.gallery) ? req.body.gallery : [];
 
     const studio = await Studio.create({
@@ -50,23 +62,27 @@ exports.createStudio = async (req, res, next) => {
 exports.getStudios = async (req, res, next) => {
   try {
     const { category, search, sort = 'createdAt', order = 'desc', page = 1, limit = 12 } = req.query;
+    const allowedSortFields = ['createdAt', 'hourlyRate', 'title'];
 
     const filter = {};
     if (category && category !== 'All') filter.category = category;
-    if (search) filter.$text = { $search: search };
+    if (typeof search === 'string' && search.trim()) filter.$text = { $search: search.trim() };
 
-    const sortObj = { [sort]: order === 'asc' ? 1 : -1 };
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pageNumber = Math.max(1, Number.parseInt(page, 10) || 1);
+    const pageSize = Math.min(48, Math.max(1, Number.parseInt(limit, 10) || 12));
+    const sortField = allowedSortFields.includes(sort) ? sort : 'createdAt';
+    const sortObj = { [sortField]: order === 'asc' ? 1 : -1 };
+    const skip = (pageNumber - 1) * pageSize;
 
     const [studios, total] = await Promise.all([
-      Studio.find(filter).sort(sortObj).skip(skip).limit(parseInt(limit)).lean(),
+      Studio.find(filter).sort(sortObj).skip(skip).limit(pageSize).lean(),
       Studio.countDocuments(filter),
     ]);
 
     res.json({
       success: true,
       data: studios,
-      meta: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) },
+      meta: { total, page: pageNumber, limit: pageSize, pages: Math.ceil(total / pageSize) },
     });
   } catch (err) {
     next(err);
@@ -91,7 +107,7 @@ exports.getStudioById = async (req, res, next) => {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ success: false, message: 'Invalid studio ID' });
     }
-    const studio = await Studio.findById(req.params.id).populate('hostId', 'name email photoURL createdAt');
+    const studio = await Studio.findById(req.params.id).populate('hostId', 'name photoURL createdAt');
     if (!studio) {
       return res.status(404).json({ success: false, message: 'Studio not found' });
     }
@@ -114,16 +130,23 @@ exports.updateStudio = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Not authorized to update this studio' });
     }
 
-    const allowedUpdates = ['title', 'category', 'hourlyRate', 'securityDeposit', 'maxCapacity', 'address', 'overview', 'amenities', 'image', 'gallery'];
+    const allowedUpdates = ['title', 'category', 'address', 'overview', 'image'];
     allowedUpdates.forEach((field) => {
       if (req.body[field] !== undefined) {
         studio[field] = req.body[field];
       }
     });
+    if (req.body.gallery !== undefined) studio.gallery = parseList(req.body.gallery);
 
     // Handle new image upload
-    if (req.files?.image?.[0]?.path) studio.image = req.files.image[0].path;
-    if (req.files?.gallery?.length) studio.gallery = req.files.gallery.map((f) => f.path);
+    if (req.files?.image?.[0]) studio.image = uploadedImageUrl(req.files.image[0]);
+    if (req.files?.gallery?.length) studio.gallery = req.files.gallery.map(uploadedImageUrl);
+    if (req.body.amenities !== undefined) studio.amenities = parseList(req.body.amenities);
+    for (const field of ['hourlyRate', 'securityDeposit', 'maxCapacity']) {
+      if (req.body[field] !== undefined && String(req.body[field]).trim() !== '') {
+        studio[field] = Number(req.body[field]);
+      }
+    }
 
     await studio.save();
     res.json({ success: true, data: studio });
@@ -139,13 +162,25 @@ exports.deleteStudio = async (req, res, next) => {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ success: false, message: 'Invalid studio ID' });
     }
-    const studio = await Studio.findById(req.params.id);
-    if (!studio) return res.status(404).json({ success: false, message: 'Studio not found' });
-    if (studio.hostId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, message: 'Not authorized to delete this studio' });
+    const releaseLock = await acquireStudioBookingLock(req.params.id);
+    try {
+      const studio = await Studio.findById(req.params.id);
+      if (!studio) return res.status(404).json({ success: false, message: 'Studio not found' });
+      if (studio.hostId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, message: 'Not authorized to delete this studio' });
+      }
+      const hasActiveBookings = await Booking.exists({
+        studioId: studio._id,
+        status: { $in: ['Pending', 'Confirmed'] },
+      });
+      if (hasActiveBookings) {
+        return res.status(409).json({ success: false, message: 'Cancel or complete active bookings before deleting this studio' });
+      }
+      await Studio.deleteOne({ _id: studio._id });
+      return res.json({ success: true, message: 'Studio deleted successfully' });
+    } finally {
+      await releaseLock();
     }
-    await Studio.deleteOne({ _id: studio._id });
-    res.json({ success: true, message: 'Studio deleted successfully' });
   } catch (err) {
     next(err);
   }

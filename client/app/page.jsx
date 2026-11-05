@@ -24,18 +24,18 @@ const categoryIcons = {
 
 // Step definitions for the "How Booking Works" section
 const steps = [
-  { number: '01', title: 'Find Your Studio', desc: 'Browse by category, location, or availability to discover the perfect space.' },
-  { number: '02', title: 'Check Availability', desc: 'View real‑time calendar slots, pricing, and read verified host reviews.' },
-  { number: '03', title: 'Book Instantly', desc: 'Reserve your slot in seconds with secure payment and instant confirmation.' },
-  { number: '04', title: 'Create & Collaborate', desc: 'Show up and create. StudioSpace handles everything else.' },
+  { number: '01', title: 'Find Your Studio', desc: 'Browse creative spaces by category, name, or location.' },
+  { number: '02', title: 'Review the Details', desc: 'Compare the listing, equipment, host information, and hourly rate.' },
+  { number: '03', title: 'Request a Booking', desc: 'Choose a date and time, then send a request for the host to confirm.' },
+  { number: '04', title: 'Plan Your Session', desc: 'Coordinate your studio visit after your request is confirmed.' },
 ];
 
 // Guarantees displayed in the "Host Guarantee" section
 const guaranteeItems = [
-  { icon: '✅', title: 'Verified Listings', desc: 'Every studio is manually reviewed before going live.' },
-  { icon: '🛡️', title: 'Secure Payments', desc: 'All transactions are encrypted and protected.' },
-  { icon: '🕐', title: '24/7 Support', desc: 'Our team is always on standby for hosts and creators alike.' },
-  { icon: '💰', title: 'Best Price Guarantee', desc: 'We match any lower rate for the same studio.' },
+  { icon: '🔎', title: 'Clear Listings', desc: 'Review the studio details, amenities, location, and hourly rate before requesting.' },
+  { icon: '📨', title: 'Host Confirmation', desc: 'Booking requests stay pending until the host confirms or cancels them.' },
+  { icon: '📅', title: 'Booking History', desc: 'Keep track of your requests and their current status in your dashboard.' },
+  { icon: '🎨', title: 'Creative Spaces', desc: 'Explore studios for photography, sound, podcasting, music, and art.' },
 ];
 
 export const metadata = {
@@ -47,14 +47,15 @@ export default async function HomePage() {
   // Fetch featured studios (first 6) from backend
   const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:5000';
   let featured = [];
+  let featuredError = false;
   try {
-    const res = await fetch(`${SERVER_URL}/api/studios`, { cache: 'no-store' });
+    const res = await fetch(`${SERVER_URL}/api/studios/featured`, { cache: 'no-store' });
     if (res.ok) {
-      const data = await res.json();
-      featured = (data.studios || data).slice(0, 6);
-    }
+      const response = await res.json();
+      featured = (response.data || []).slice(0, 6);
+    } else featuredError = true;
   } catch {
-    // Backend not running — render page without featured studios
+    featuredError = true;
   }
 
   return (
@@ -63,21 +64,6 @@ export default async function HomePage() {
       <HeroSlider />
 
       <div className="px-4 md:px-8 lg:px-16 space-y-20 py-16">
-        {/* Stats Bar */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-          {[
-            { value: '500+', label: 'Studios Listed' },
-            { value: '12K+', label: 'Bookings Made' },
-            { value: '4.9★', label: 'Average Rating' },
-            { value: '50+', label: 'Cities Covered' },
-          ].map((stat) => (
-            <div key={stat.label} className="bg-base-200 rounded-2xl p-6">
-              <p className="text-3xl font-extrabold text-primary">{stat.value}</p>
-              <p className="text-sm text-gray-500 mt-1">{stat.label}</p>
-            </div>
-          ))}
-        </section>
-
         {/* Browse by Categories */}
         <section>
           <div className="text-center mb-10">
@@ -107,7 +93,7 @@ export default async function HomePage() {
             </div>
             <Link href="/studios" className="btn btn-outline btn-primary">View All</Link>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {featured.length > 0 ? <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {featured.map((studio) => (
               <StudioCard
                 key={studio._id}
@@ -123,7 +109,11 @@ export default async function HomePage() {
                 }}
               />
             ))}
-          </div>
+          </div> : (
+            <p className="rounded-xl bg-base-200 p-6 text-center text-gray-500" role="status">
+              {featuredError ? 'Featured studios are temporarily unavailable. Please try again later.' : 'No studios have been listed yet.'}
+            </p>
+          )}
         </section>
 
         {/* How Booking Works */}
@@ -152,7 +142,7 @@ export default async function HomePage() {
         <section>
           <div className="text-center mb-10">
             <h2 className="text-3xl font-bold mb-2">The StudioSpace Guarantee</h2>
-            <p className="text-gray-500">We've got you covered, every step of the way</p>
+            <p className="text-gray-500">We&apos;ve got you covered, every step of the way</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {guaranteeItems.map((item) => (
@@ -171,11 +161,11 @@ export default async function HomePage() {
           <div className="relative z-10 py-16 px-8 md:px-16 text-white text-center">
             <h2 className="text-4xl font-extrabold mb-4">Own a Creative Space?</h2>
             <p className="text-xl opacity-90 mb-8 max-w-xl mx-auto">
-              Join hundreds of studio owners earning passive income by sharing their space with talented creators.
+              Share your creative space with people looking for a place to make their next project.
             </p>
             <div className="flex gap-4 justify-center flex-wrap">
               <Link href="/add-studio" className="btn btn-white text-primary btn-lg font-bold bg-white hover:bg-gray-100">
-                List Your Studio — It's Free
+                List Your Studio — It&apos;s Free
               </Link>
               <Link href="/studios" className="btn btn-outline text-white border-white btn-lg hover:bg-white hover:text-primary">
                 Browse Studios

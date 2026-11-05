@@ -11,6 +11,9 @@ module.exports = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
     const decoded = jwt.verify(token, config.jwtSecret);
+    if (!decoded.id) {
+      return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
     // Attach full user document (excluding password) to req.user
     const user = await User.findById(decoded.id).select('-password');
     if (!user) {
@@ -19,7 +22,9 @@ module.exports = async (req, res, next) => {
     req.user = user; // read‑only
     next();
   } catch (err) {
-    console.error('Auth middleware error', err);
+    if (err.name !== 'JsonWebTokenError' && err.name !== 'TokenExpiredError') {
+      console.error('Auth middleware error', err);
+    }
     return res.status(401).json({ success: false, message: 'Invalid token' });
   }
 };

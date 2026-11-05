@@ -43,12 +43,16 @@ if (isConfigured) {
 } else {
   const path = require('path');
   const fs = require('fs');
-  const uploadsDir = path.join(process.cwd(), 'src', 'uploads');
+  const uploadsDir = path.join(__dirname, '..', 'uploads');
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+  const { randomUUID } = require('crypto');
 
   storage = multer.diskStorage({
     destination: uploadsDir,
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`),
+    filename: (req, file, cb) => {
+      const extension = path.extname(file.originalname).toLowerCase();
+      cb(null, `${randomUUID()}${extension}`);
+    },
   });
   console.warn('[Cloudinary] Not configured – using local disk storage. Set CLOUDINARY_* env vars for production.');
 }
@@ -60,7 +64,9 @@ const upload = multer({
     if (/image\/(jpeg|jpg|png|webp)/.test(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only JPEG, PNG and WebP images are allowed'));
+      const error = new Error('Only JPEG, PNG and WebP images are allowed');
+      error.statusCode = 400;
+      cb(error);
     }
   },
 });

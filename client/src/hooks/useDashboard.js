@@ -12,38 +12,39 @@ import { toast } from 'sonner';
  *   - totalEarnings (host view)
  *   - averageRating (host view)
  */
-export function useDashboard() {
+export function useDashboard(user) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
+    let active = true;
     async function fetchData() {
-      try {
-        const [customerRes, hostRes] = await Promise.all([
-          api.get('/dashboard/customer'),
-          api.get('/dashboard/host'),
-        ]);
-        const combined = {
-          user: customerRes.user,
-          stats: {
-            totalListings: customerRes.stats?.totalListings ?? 0,
-            totalBookings: customerRes.stats?.totalBookings ?? 0,
-          },
-          recentBookings: customerRes.recentBookings ?? [],
-          totalEarnings: hostRes.totalEarnings ?? 0,
-          averageRating: hostRes.averageRating ?? 'N/A',
-        };
-        setData(combined);
-      } catch (err) {
-        setError(err);
-        toast.error(err.message || 'Failed to load dashboard');
-      } finally {
+      if (!user) {
+        setData(null);
         setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+      try {
+        const endpoint = user.role === 'host' ? '/dashboard/host' : '/dashboard/customer';
+        const response = await api.get(endpoint);
+        if (active) setData(response.data);
+      } catch (err) {
+        if (active) {
+          setError(err);
+          toast.error(err.message || 'Failed to load dashboard');
+        }
+      } finally {
+        if (active) setLoading(false);
       }
     }
     fetchData();
-  }, []);
+    return () => { active = false; };
+  }, [retry, user]);
 
-  return { data, loading, error };
+  return { data, setData, loading, error, retry: () => setRetry((value) => value + 1) };
 }

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { AuthContext } from '../../src/context/AuthContext';
-import { toast } from 'sonner';
+import GoogleSignInButton from '../../components/GoogleSignInButton';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -14,9 +14,10 @@ export default function RegisterPage() {
   const [form, setForm] = useState({
     name: '',
     email: '',
+    photoURL: '',
     password: '',
     confirm: '',
-    role: 'creator',
+    role: 'customer',
   });
   const [errors, setErrors] = useState({});
 
@@ -25,8 +26,15 @@ export default function RegisterPage() {
     if (!form.name.trim()) errs.name = 'Full name is required';
     if (!form.email) errs.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Enter a valid email';
+    try {
+      if (new URL(form.photoURL).protocol !== 'https:') errs.photoURL = 'Photo URL must use HTTPS';
+    } catch {
+      errs.photoURL = 'A valid photo URL is required';
+    }
     if (!form.password) errs.password = 'Password is required';
-    else if (form.password.length < 6) errs.password = 'Minimum 6 characters';
+    else if (form.password.length < 6 || !/[a-z]/.test(form.password) || !/[A-Z]/.test(form.password)) {
+      errs.password = 'Use at least 6 characters with uppercase and lowercase letters';
+    }
     if (form.password !== form.confirm) errs.confirm = 'Passwords do not match';
     return errs;
   };
@@ -43,13 +51,13 @@ export default function RegisterPage() {
       await register({
         name: form.name,
         email: form.email,
+        photoURL: form.photoURL,
         password: form.password,
         role: form.role,
       });
-      router.push('/dashboard');
+      router.push('/login?registered=1');
     } catch (err) {
-      const msg = err?.response?.data?.message || err.message || 'Registration failed';
-      toast.error(msg);
+      setErrors({ submit: err?.response?.data?.message || err.message || 'Registration failed' });
     }
   };
 
@@ -64,7 +72,7 @@ export default function RegisterPage() {
               <span className="font-extrabold text-2xl text-primary">StudioSpace</span>
             </Link>
             <h1 className="text-2xl font-bold">Create your account</h1>
-            <p className="text-gray-500 text-sm">Join thousands of creators on StudioSpace</p>
+            <p className="text-gray-500 text-sm">Create an account to book or list a studio</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -74,7 +82,7 @@ export default function RegisterPage() {
                 <span className="label-text font-medium">I am a…</span>
               </label>
               <div className="flex gap-3">
-                {[{ value: 'creator', label: '🎨 Creator', desc: 'Book studios' }, { value: 'host', label: '🏠 Host', desc: 'List my studio' }].map((r) => (
+                {[{ value: 'customer', label: '🎨 Creator', desc: 'Book studios' }, { value: 'host', label: '🏠 Host', desc: 'List my studio' }].map((r) => (
                   <label
                     key={r.value}
                     className={`flex-1 border-2 rounded-xl p-4 cursor-pointer transition-all ${
@@ -121,6 +129,20 @@ export default function RegisterPage() {
               {errors.email && <p className="text-error text-xs mt-1">{errors.email}</p>}
             </div>
 
+            <div className="form-control">
+              <label className="label"><span className="label-text font-medium">Profile Photo URL</span></label>
+              <input
+                id="reg-photo-url"
+                type="url"
+                required
+                placeholder="https://example.com/photo.jpg"
+                className={`input input-bordered w-full ${errors.photoURL ? 'input-error' : ''}`}
+                value={form.photoURL}
+                onChange={(e) => setForm({ ...form, photoURL: e.target.value })}
+              />
+              {errors.photoURL && <p className="text-error text-xs mt-1">{errors.photoURL}</p>}
+            </div>
+
             {/* Password & Confirm */}
             <div className="grid grid-cols-2 gap-4">
               <div className="form-control">
@@ -158,8 +180,7 @@ export default function RegisterPage() {
               <label className="cursor-pointer label justify-start gap-2">
                 <input type="checkbox" required className="checkbox checkbox-primary checkbox-sm" />
                 <span className="label-text text-sm">
-                  I agree to the <Link href="/terms" className="link link-primary">Terms of Service</Link> and{' '}
-                  <Link href="/privacy" className="link link-primary">Privacy Policy</Link>
+                  I agree to use StudioSpace responsibly and follow its terms and privacy policy.
                 </span>
               </label>
             </div>
@@ -171,6 +192,9 @@ export default function RegisterPage() {
             >
               {loading ? 'Creating…' : 'Create Account'}
             </button>
+            {errors.submit && <p className="text-error text-center text-sm">{errors.submit}</p>}
+            <div className="divider text-xs text-gray-400">OR</div>
+            <GoogleSignInButton />
           </form>
 
           <p className="text-center text-sm text-gray-500">

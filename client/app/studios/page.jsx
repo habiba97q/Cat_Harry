@@ -1,7 +1,6 @@
 "use client"
-import React, { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { useSearchParams, useRouter } from 'next/navigation'
+import React, { Suspense, useState, useEffect } from 'react'
+import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import StudioCard from '../../components/StudioCard'
 import { api } from '../../src/utils/api'
 import { toast } from 'sonner'
@@ -15,15 +14,26 @@ const categoryIcons = {
 }
 
 export default function StudiosPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center min-h-[200px]"><span className="loading loading-spinner text-primary"></span></div>}>
+      <StudiosContent />
+    </Suspense>
+  )
+}
+
+function StudiosContent() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const queryCategory = searchParams.get('category') || 'All'
   const querySearch = searchParams.get('search') || ''
-  const queryPage = parseInt(searchParams.get('page') || '1', 10)
+  const queryPage = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10) || 1)
 
   const [studios, setStudios] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [meta, setMeta] = useState({ total: 0, pages: 1 })
+  const [retry, setRetry] = useState(0)
   const [activeCategory, setActiveCategory] = useState(queryCategory)
   const [search, setSearch] = useState(querySearch)
   const [page, setPage] = useState(queryPage)
@@ -31,21 +41,31 @@ export default function StudiosPage() {
   const itemsPerPage = 12
 
   useEffect(() => {
+    let active = true
     const fetchStudios = async () => {
       setLoading(true)
+      setError(null)
       try {
-        const data = await api.get('/studios')
-        const list = data.studios || data
-        setStudios(list)
+        const params = new URLSearchParams({ page: String(page), limit: String(itemsPerPage) })
+        if (activeCategory !== 'All') params.set('category', activeCategory)
+        if (search.trim()) params.set('search', search.trim())
+        const response = await api.get(`/studios?${params.toString()}`)
+        if (!active) return
+        setStudios(response.data || [])
+        setMeta(response.meta || { total: 0, pages: 1 })
+        if (page > (response.meta?.pages || 1)) setPage(response.meta?.pages || 1)
       } catch (err) {
-        setError(err.message || 'Failed to load studios')
-        toast.error(err.message || 'Failed to load studios')
+        if (active) {
+          setError(err.message || 'Failed to load studios')
+          toast.error(err.message || 'Failed to load studios')
+        }
       } finally {
-        setLoading(false)
+        if (active) setLoading(false)
       }
     }
     fetchStudios()
-  }, [])
+    return () => { active = false }
+  }, [activeCategory, page, retry, search])
 
   // Sync UI state with URL query parameters
   useEffect(() => {
@@ -53,21 +73,18 @@ export default function StudiosPage() {
     if (activeCategory && activeCategory !== 'All') params.set('category', activeCategory)
     if (search) params.set('search', search)
     if (page > 1) params.set('page', page.toString())
-    const url = `${router.pathname}?${params.toString()}`
+    const query = params.toString()
+    const url = query ? `${pathname}?${query}` : pathname
     router.replace(url, { scroll: false })
-  }, [activeCategory, search, page])
+  }, [activeCategory, page, pathname, router, search])
 
-  const filtered = studios.filter((s) => {
-    const matchCat = activeCategory === 'All' || s.category === activeCategory
-    const matchSearch =
-      s.title?.toLowerCase().includes(search.toLowerCase()) ||
-      s.address?.toLowerCase().includes(search.toLowerCase())
-    return matchCat && matchSearch
-  })
+  const totalPages = Math.max(meta.pages || 1, 1)
 
-  const paginated = filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage)
-
-  const totalPages = Math.ceil(filtered.length / itemsPerPage)
+  useEffect(() => {
+    setActiveCategory(queryCategory)
+    setSearch(querySearch)
+    setPage(queryPage)
+  }, [queryCategory, querySearch, queryPage])
 
   const handleCategory = (cat) => {
     setActiveCategory(cat)
@@ -91,7 +108,7 @@ export default function StudiosPage() {
     return (
       <div className="text-center py-20">
         <p className="text-red-600">{error}</p>
-        <button className="btn btn-primary mt-4" onClick={() => router.refresh()}>
+        <button className="btn btn-primary mt-4" onClick={() => setRetry((value) => value + 1)}>
           Retry
         </button>
       </div>
@@ -111,7 +128,7 @@ export default function StudiosPage() {
             type="text"
             placeholder="Search by name or city..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
             className="input input-bordered flex-1 bg-white text-gray-900 placeholder-gray-400"
           />
           <button type="submit" className="btn btn-white bg-white text-primary font-bold hover:bg-gray-100">
@@ -140,19 +157,19 @@ export default function StudiosPage() {
 
       {/* Results count */}
       <p className="text-sm text-gray-500 mb-4">
-        Showing <span className="font-bold text-base-content">{filtered.length}</span> studios
+        Showing <span className="font-bold text-base-content">{meta.total}</span> studios
         {activeCategory !== 'All' && (
           <> in <span className="text-primary font-semibold">{activeCategory}</span></>
         )}
         {search && (
-          <> matching <span className="text-primary font-semibold">"{search}"</span></>
+          <> matching <span className="text-primary font-semibold">&quot;{search}&quot;</span></>
         )}
       </p>
 
       {/* Studio Grid */}
-      {paginated.length > 0 ? (
+      {studios.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-          {paginated.map((studio) => (
+          {studios.map((studio) => (
             <StudioCard
               key={studio._id}
               studio={{

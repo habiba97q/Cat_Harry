@@ -18,8 +18,8 @@ export default function NotFound() {
         <div className="space-y-3">
           <h1 className="text-3xl md:text-4xl font-extrabold">Page Not Found</h1>
           <p className="text-gray-500 text-lg leading-relaxed">
-            Looks like this studio doesn't exist yet — or it moved locations.
-            Let's get you back on set.
+            Looks like this studio doesn&apos;t exist yet — or it moved locations.
+            Let&apos;s get you back on set.
           </p>
         </div>
 
